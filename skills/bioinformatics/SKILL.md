@@ -185,3 +185,128 @@ profiles {
 | % on-target reads (WES) | > 70% | > 85% |
 | Ti/Tv ratio (WGS) | 2.0–2.1 | 2.0–2.1 |
 | Ti/Tv ratio (WES) | 2.6–3.5 | 2.8–3.3 |
+
+---
+
+## Section 3: Genomic Database Reference
+
+A curated reference of essential databases for variant interpretation, population genetics, disease association, and functional genomics.
+
+---
+
+### Population Frequency Databases
+
+Use population databases to filter common variants and assess allele frequencies in diverse cohorts. Variants with MAF > 1% in population databases are generally not considered causative for rare Mendelian disease.
+
+| Database | Description | URL |
+|----------|-------------|-----|
+| **gnomAD** | Genome Aggregation Database — allele frequencies across >140,000 exomes and >60,000 genomes from diverse populations. Primary reference for population filtering. | https://gnomad.broadinstitute.org/ |
+| **ExAC** | Exome Aggregation Consortium — predecessor to gnomAD; ~60,000 exomes. Use gnomAD v3+ for new analyses, ExAC for legacy compatibility. | http://exac.broadinstitute.org/ |
+| **1000 Genomes Project** | Whole-genome sequencing of >2,500 individuals across 26 populations. Foundational reference for population structure and common variant cataloguing. | https://www.internationalgenome.org/data |
+| **dbSNP** | NCBI's database of short genetic variants (SNPs and indels). Primary registry for variant identifiers (rs numbers). | https://www.ncbi.nlm.nih.gov/snp |
+| **NHLBI-ESP** | NHLBI Exome Sequencing Project — allele frequencies from ~6,500 exomes; focused on heart, lung, and blood disease populations. | https://esp.gs.washington.edu/ |
+
+**Filtering recommendation:** Apply gnomAD MAF < 0.01 (rare disease) or < 0.001 (ultra-rare / de novo) as the primary frequency filter before in-silico scoring.
+
+---
+
+### Disease & Clinical Variant Databases
+
+| Database | Description | URL |
+|----------|-------------|-----|
+| **ClinVar** | NCBI's archive of human variants with clinical significance interpretations (Pathogenic, Likely Pathogenic, VUS, Benign). Always check submission review status. | https://www.ncbi.nlm.nih.gov/clinvar |
+| **OMIM** | Online Mendelian Inheritance in Man — authoritative catalogue of genes and genetic phenotypes. Essential for gene–disease association lookup. | https://www.omim.org |
+| **HPO** | Human Phenotype Ontology — standardized vocabulary for human disease phenotypes. Use for phenotype-driven variant filtering and patient matching. | https://hpo.jax.org/ |
+| **HGMD** | Human Gene Mutation Database — comprehensive collection of published germline mutations in human disease genes. Requires license for full access. | http://www.hgmd.org |
+| **Orphanet** | Rare disease encyclopedia with gene–disease associations, prevalence data, and clinical summaries. Valuable for ultra-rare disease context. | https://www.orpha.net/ |
+| **HGVS** | Human Genome Variation Society — curators of variant nomenclature standards and links to locus-specific databases. | http://www.hgvs.org/content/databases-tools |
+| **Gene4Denovo** | Database of de novo mutations associated with developmental disorders; useful for trio-based WES/WGS analysis. | http://genemed.tech/gene4denovo/home |
+
+**Usage note:** Cross-reference ClinVar and HGMD for any variant classified as VUS before reporting. Conflicting interpretations between submitters require manual review.
+
+---
+
+### Sequence & Reference Genome Databases
+
+| Database | Description | URL |
+|----------|-------------|-----|
+| **NCBI Genome** | Central repository for reference genome sequences, assemblies, and annotations across all organisms. | https://www.ncbi.nlm.nih.gov/genome |
+| **RefSeqGene** | NCBI curated reference sequences for human gene regions — the standard for variant coordinates in clinical reporting. Always use RefSeq transcript IDs (NM_/NR_) in reports. | https://www.ncbi.nlm.nih.gov/refseq/rsg |
+| **Ensembl** | Genome browser and annotation database for vertebrates and other eukaryotes. Provides GENCODE transcripts, regulatory features, and cross-species comparisons. | https://www.ensembl.org/index.html |
+
+---
+
+### Protein Sequence & Function Databases
+
+| Database | Description | URL |
+|----------|-------------|-----|
+| **UniProt** | Comprehensive resource for protein sequence and functional annotation. Use to assess domain impact of missense variants and review protein-level evidence for pathogenicity. | https://www.uniprot.org/ |
+
+---
+
+### Missense Variant Effect Predictors
+
+No single predictor is sufficient. Use multiple tools and look for concordance. Conflicting predictions should increase caution about classification.
+
+| Tool | Description | URL |
+|------|-------------|-----|
+| **PolyPhen-2** | Predicts damaging effects of amino acid substitutions using sequence and structural features (score 0–1; >0.85 = probably damaging). | http://genetics.bwh.harvard.edu/pph2 |
+| **SIFT** | Sequence-based prediction of amino acid substitution tolerance (score <0.05 = damaging). Based on evolutionary conservation. | http://sift.jcvi.org |
+| **MutationTaster** | Predicts disease-causing potential using evolutionary conservation, splice-site changes, and protein features. | http://www.mutationtaster.org |
+| **MutationAssessor** | Assesses functional impact of missense variants based on evolutionary conservation in protein families. | http://mutationassessor.org |
+| **PROVEAN** | Predicts whether an amino acid substitution or indel affects protein function using sequence alignment scoring. | http://provean.jcvi.org/index.php |
+| **InterVar** | Automated ACMG/AMP 2015 variant classification using multiple evidence sources. Outputs evidence codes (PS, PM, PP, BA, BS, BP) directly. | http://wintervar.wglab.org/ |
+| **FATHMM** | Predicts functional consequences of missense variants using hidden Markov models; includes cancer-specific predictions. | http://fathmm.biocompute.org.uk/ |
+| **CADD** | Combined Annotation Dependent Depletion — integrates >60 annotations into a single Phred-scaled score (C-score). CADD ≥ 20 = top 1% most deleterious variants. | https://cadd.gs.washington.edu/ |
+| **dbNSFP** | Pre-computed functional predictions for all possible human SNVs across >30 tools. Use for batch annotation rather than individual queries. | https://sites.google.com/site/jpopgen/dbNSFP |
+
+**Recommended ensemble approach:** Require ≥3 concordant damaging predictions before treating a missense variant as likely pathogenic.
+
+---
+
+### Splice Site Effect Predictors
+
+Splice-disrupting variants are frequently pathogenic but often missed by standard missense tools. Always evaluate canonical splice sites (±1/2 bp) and cryptic splice sites.
+
+| Tool | Description | URL |
+|------|-------------|-----|
+| **GeneSplicer** | Predicts splice sites using a combination of Markov models and information content; detects both donor and acceptor sites. | http://www.cbcb.umd.edu/software/GeneSplicer/ |
+| **NetGene2** | Neural network-based splice site prediction for human, Arabidopsis, and C. elegans. | http://www.cbs.dtu.dk/services/NetGene2/ |
+| **dbscSNV** | Database of splicing consensus SNVs with pre-computed scores for all SNVs within splicing consensus regions (±2 bp). | http://www.liulab.science/dbscsnv.html |
+| **SpliceAI** | Deep learning tool for predicting splicing effects of variants up to 50 bp from splice junctions. Score ≥ 0.2 = likely splice-altering; ≥ 0.5 = high confidence. | https://spliceailookup.broadinstitute.org/ |
+| **SpliceRegion** | VEP plugin that annotates variants in the broader splice region (±3–8 bp from exon boundary) beyond canonical ±1/2 positions. | Available as Ensembl VEP plugin |
+
+**Clinical practice:** For variants within 10 bp of a splice site, always run SpliceAI and at least one additional predictor. A SpliceAI score ≥ 0.5 is considered strong functional evidence (PS3/PP3 level).
+
+---
+
+### Evolutionary Conservation Scores
+
+Conservation scores reflect selective pressure — highly conserved positions tolerate fewer mutations. Use as supporting evidence, not standalone proof of pathogenicity.
+
+| Tool | Description | URL |
+|------|-------------|-----|
+| **GERP** | Genomic Evolutionary Rate Profiling — estimates conservation based on maximum likelihood evolutionary rates. GERP RS > 2 indicates constrained positions. | http://mendel.stanford.edu/sidowlab/downloads/gerp/ |
+| **PhyloP** | Measures conservation or acceleration at individual nucleotide positions using phylogenetic models. Positive scores = conserved; negative = accelerated evolution. | http://compgen.cshl.edu/phast/ |
+
+---
+
+### Repeat & Structural Variant Databases
+
+| Tool | Description | URL |
+|------|-------------|-----|
+| **RepeatMasker** | Screens DNA sequences for interspersed repeats and low-complexity regions using Repbase repeat libraries. Essential for masking repetitive regions before alignment and annotation. | http://www.repeatmasker.org/ |
+
+---
+
+### Database Selection Guide
+
+| Analysis Type | Primary Databases |
+|--------------|-------------------|
+| Rare disease variant filtering | gnomAD, ClinVar, OMIM, HPO |
+| Missense pathogenicity | CADD, REVEL, SIFT, PolyPhen-2, InterVar |
+| Splice variant assessment | SpliceAI, dbscSNV, NetGene2 |
+| De novo variant analysis | gnomAD, Gene4Denovo, DECIPHER |
+| Population genetics | gnomAD, 1000 Genomes, ExAC |
+| Protein function | UniProt, MutationAssessor, PROVEAN |
+| Reference coordinates | RefSeqGene, Ensembl, NCBI Genome |
