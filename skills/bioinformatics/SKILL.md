@@ -67,7 +67,7 @@ Scoring variant pathogenicity requires combining multiple in-silico predictors. 
 
 ### ACMG/AMP Classification (Quick Reference)
 
-Follow ACMG/AMP 2015 standards (Richards et al., *Genetics in Medicine* 2015) for variant classification:
+Follow ACMG/AMP 2015 standards ([Richards et al., *Genetics in Medicine* 2015](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4544753/)) for variant classification:
 
 **Pathogenic evidence:**
 - **PVS1** = Very strong — null variant (nonsense, frameshift, canonical ±1/2 splice site) in gene where LOF is known disease mechanism
@@ -90,7 +90,7 @@ Full standards: https://www.acmg.net/ACMG/Medical-Genetics-Practice-Resources/Ge
 
 ### ACMG/ClinGen CNV Classification
 
-For constitutional copy-number variants (CNVs), use the ACMG/ClinGen semiquantitative scoring framework (Riggs et al., *Genetics in Medicine* 2020). Evidence categories include:
+For constitutional copy-number variants (CNVs), use the ACMG/ClinGen semiquantitative scoring framework ([Riggs et al., *Genetics in Medicine* 2020](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6954348/)). Evidence categories include:
 - Genomic content (haploinsufficiency, triplosensitivity)
 - Overlap with established benign/pathogenic regions
 - Case-control data and inheritance patterns
@@ -150,7 +150,8 @@ Essential command-line tools for NGS data processing:
 | **SnpEff / SnpSift** | Variant annotation and functional effect prediction; SnpSift filters and manipulates annotated VCF files | https://pcingola.github.io/SnpEff/ |
 | **VEP (Ensembl Variant Effect Predictor)** | Annotates variants with gene consequence, regulatory impact, and external database cross-references | https://www.ensembl.org/vep |
 | **VCFtools** | Filters and analyses VCF files — allele frequency, linkage disequilibrium, and population statistics | https://vcftools.github.io/ |
-| **Trimmomatic / fastp** | Adapter trimming and quality filtering of raw FASTQ reads before alignment | https://github.com/usadellab/Trimmomatic |
+| **Trimmomatic** | Adapter trimming and quality filtering of raw FASTQ reads before alignment | https://github.com/usadellab/Trimmomatic |
+| **fastp** | An all-in-one FASTQ preprocessor for trimming, correction, and quality control | https://github.com/OpenGene/fastp |
 | **IGSR (International Genome Sample Resource)** | Repository of publicly available human genome sequencing data including 1000 Genomes samples | https://www.internationalgenome.org/data-portal/sample |
 
 **Standard WES/WGS pipeline order:**
