@@ -34,7 +34,7 @@
 
 **The performance optimization system for AI agent harnesses. From an Anthropic hackathon winner.**
 
-Not just configs. A complete system: skills, instincts, memory optimization, continuous learning, security scanning, and research-first development. Production-ready agents, hooks, commands, rules, and MCP configurations evolved over 10+ months of intensive daily use building real products.
+Not just configs. A complete system: skills, instincts, memory optimization, continuous learning, security scanning, and research-first development. Production-ready agents, skills, hooks, rules, MCP configurations, and legacy command shims evolved over 10+ months of intensive daily use building real products.
 
 Works across **Claude Code**, **Codex**, **Cowork**, and other AI agent harnesses.
 
@@ -187,6 +187,7 @@ npm install        # or: pnpm install | yarn install | bun install
 # ./install.sh typescript python golang swift php
 # ./install.sh --target cursor typescript
 # ./install.sh --target antigravity typescript
+# ./install.sh --target gemini --profile full
 ```
 
 ```powershell
@@ -200,6 +201,7 @@ npm install        # or: pnpm install | yarn install | bun install
 # .\install.ps1 typescript python golang swift php
 # .\install.ps1 --target cursor typescript
 # .\install.ps1 --target antigravity typescript
+# .\install.ps1 --target gemini --profile full
 
 # npm-installed compatibility entrypoint also works cross-platform
 npx ecc-install typescript
@@ -210,17 +212,20 @@ For manual install instructions see the README in the `rules/` folder. When copy
 ### Step 3: Start Using
 
 ```bash
-# Try a command (plugin install uses namespaced form)
+# Skills are the primary workflow surface.
+# Existing slash-style command names still work while ECC migrates off commands/.
+
+# Plugin install uses the namespaced form
 /everything-claude-code:plan "Add user authentication"
 
-# Manual install (Option 2) uses the shorter form:
+# Manual install keeps the shorter slash form:
 # /plan "Add user authentication"
 
 # Check available commands
 /plugin list everything-claude-code@everything-claude-code
 ```
 
-**That's it!** You now have access to 30 agents, 136 skills, and 60 commands.
+**That's it!** You now have access to 36 agents, 151 skills, and 68 legacy command shims.
 
 ### Multi-model commands require additional setup
 
@@ -295,7 +300,7 @@ everything-claude-code/
 |   |-- plugin.json         # Plugin metadata and component paths
 |   |-- marketplace.json    # Marketplace catalog for /plugin marketplace add
 |
-|-- agents/           # 30 specialized subagents for delegation
+|-- agents/           # 36 specialized subagents for delegation
 |   |-- planner.md           # Feature implementation planning
 |   |-- architect.md         # System design decisions
 |   |-- tdd-guide.md         # Test-driven development
@@ -390,7 +395,7 @@ everything-claude-code/
 |   |-- autonomous-loops/           # Autonomous loop patterns: sequential pipelines, PR loops, DAG orchestration (NEW)
 |   |-- plankton-code-quality/      # Write-time code quality enforcement with Plankton hooks (NEW)
 |
-|-- commands/         # Slash commands for quick execution
+|-- commands/         # Legacy slash-entry shims; prefer skills/
 |   |-- tdd.md              # /tdd - Test-driven development
 |   |-- plan.md             # /plan - Implementation planning
 |   |-- e2e.md              # /e2e - E2E test generation
@@ -669,10 +674,7 @@ cp -r everything-claude-code/rules/python ~/.claude/rules/
 cp -r everything-claude-code/rules/golang ~/.claude/rules/
 cp -r everything-claude-code/rules/php ~/.claude/rules/
 
-# Copy commands
-cp everything-claude-code/commands/*.md ~/.claude/commands/
-
-# Copy skills (core vs niche)
+# Copy skills first (primary workflow surface)
 # Recommended (new users): core/general skills only
 cp -r everything-claude-code/.agents/skills/* ~/.claude/skills/
 cp -r everything-claude-code/skills/search-first ~/.claude/skills/
@@ -681,6 +683,10 @@ cp -r everything-claude-code/skills/search-first ~/.claude/skills/
 # for s in django-patterns django-tdd laravel-patterns springboot-patterns; do
 # cp -r everything-claude-code/skills/$s ~/.claude/skills/
 # done
+
+# Optional: keep legacy slash-command compatibility during migration
+mkdir -p ~/.claude/commands
+cp everything-claude-code/commands/*.md ~/.claude/commands/
 ```
 
 #### Add hooks to settings.json
@@ -689,7 +695,7 @@ Copy the hooks from `hooks/hooks.json` to your `~/.claude/settings.json`.
 
 #### Configure MCPs
 
-Copy desired MCP servers from `mcp-configs/mcp-servers.json` to your `~/.claude.json`.
+Copy desired MCP server definitions from `mcp-configs/mcp-servers.json` into your official Claude Code config in `~/.claude/settings.json`, or into a project-scoped `.mcp.json` if you want repo-local MCP access.
 
 **Important:** Replace `YOUR_*_HERE` placeholders with your actual API keys.
 
@@ -714,7 +720,7 @@ You are a senior code reviewer...
 
 ### Skills
 
-Skills are workflow definitions invoked by commands or agents:
+Skills are the primary workflow surface. They can be invoked directly, suggested automatically, and reused by agents. ECC still ships `commands/` during migration, but new workflow development should land in `skills/` first.
 
 ```markdown
 # TDD Workflow
@@ -760,7 +766,7 @@ See [`rules/README.md`](rules/README.md) for installation and structure details.
 
 ## Which Agent Should I Use?
 
-Not sure where to start? Use this quick reference:
+Not sure where to start? Use this quick reference. Skills are the canonical workflow surface; slash entries below are the compatibility form most users already know.
 
 | I want to... | Use this command | Agent used |
 |--------------|-----------------|------------|
@@ -779,6 +785,8 @@ Not sure where to start? Use this quick reference:
 | Audit database queries | *(auto-delegated)* | database-reviewer |
 
 ### Common Workflows
+
+Slash forms below are shown because they are still the fastest familiar entrypoint. Under the hood, ECC is shifting these workflows toward skills-first definitions.
 
 **Starting a new feature:**
 ```
@@ -885,6 +893,7 @@ Each component is fully independent.
 
 Yes. ECC is cross-platform:
 - **Cursor**: Pre-translated configs in `.cursor/`. See [Cursor IDE Support](#cursor-ide-support).
+- **Gemini CLI**: Experimental project-local support via `.gemini/GEMINI.md` and shared installer plumbing.
 - **OpenCode**: Full plugin support in `.opencode/`. See [OpenCode Support](#-opencode-support).
 - **Codex**: First-class support for both macOS app and CLI, with adapter drift guards and SessionStart fallback. See PR [#257](https://github.com/affaan-m/everything-claude-code/pull/257).
 - **Antigravity**: Tightly integrated setup for workflows, skills, and flattened rules in `.agent/`. See [Antigravity Guide](docs/ANTIGRAVITY-GUIDE.md).
@@ -1109,9 +1118,9 @@ The configuration is automatically detected from `.opencode/opencode.json`.
 
 | Feature | Claude Code | OpenCode | Status |
 |---------|-------------|----------|--------|
-| Agents | PASS: 30 agents | PASS: 12 agents | **Claude Code leads** |
-| Commands | PASS: 60 commands | PASS: 31 commands | **Claude Code leads** |
-| Skills | PASS: 136 skills | PASS: 37 skills | **Claude Code leads** |
+| Agents | PASS: 36 agents | PASS: 12 agents | **Claude Code leads** |
+| Commands | PASS: 68 commands | PASS: 31 commands | **Claude Code leads** |
+| Skills | PASS: 151 skills | PASS: 37 skills | **Claude Code leads** |
 | Hooks | PASS: 8 event types | PASS: 11 events | **OpenCode has more!** |
 | Rules | PASS: 29 rules | PASS: 13 instructions | **Claude Code leads** |
 | MCP Servers | PASS: 14 servers | PASS: Full | **Full parity** |
@@ -1131,7 +1140,7 @@ OpenCode's plugin system is MORE sophisticated than Claude Code with 20+ event t
 
 **Additional OpenCode events**: `file.edited`, `file.watcher.updated`, `message.updated`, `lsp.client.diagnostics`, `tui.toast.show`, and more.
 
-### Available Commands (31+)
+### Available Slash Entry Shims (31+)
 
 | Command | Description |
 |---------|-------------|
@@ -1218,9 +1227,9 @@ ECC is the **first plugin to maximize every major AI coding tool**. Here's how e
 
 | Feature | Claude Code | Cursor IDE | Codex CLI | OpenCode |
 |---------|------------|------------|-----------|----------|
-| **Agents** | 21 | Shared (AGENTS.md) | Shared (AGENTS.md) | 12 |
-| **Commands** | 52 | Shared | Instruction-based | 31 |
-| **Skills** | 102 | Shared | 10 (native format) | 37 |
+| **Agents** | 36 | Shared (AGENTS.md) | Shared (AGENTS.md) | 12 |
+| **Commands** | 68 | Shared | Instruction-based | 31 |
+| **Skills** | 151 | Shared | 10 (native format) | 37 |
 | **Hook Events** | 8 types | 15 types | None yet | 11 types |
 | **Hook Scripts** | 20+ scripts | 16 scripts (DRY adapter) | N/A | Plugin hooks |
 | **Rules** | 34 (common + lang) | 34 (YAML frontmatter) | Instruction-based | 13 instructions |
