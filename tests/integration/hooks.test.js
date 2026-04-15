@@ -7,6 +7,7 @@
  */
 
 const assert = require('assert');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -109,24 +110,70 @@ function runHookCommand(command, input = {}, env = {}, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const isWindows = process.platform === 'win32';
     const mergedEnv = { ...process.env, CLAUDE_PLUGIN_ROOT: REPO_ROOT, ...env };
+    if (Array.isArray(command)) {
+      const [program, ...args] = command;
+      const proc = spawn(program, args, { env: mergedEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+
+      let stdout = '';
+      let stderr = '';
+      let timer;
+
+      proc.stdout.on('data', data => stdout += data);
+      proc.stderr.on('data', data => stderr += data);
+
+      proc.stdin.on('error', (err) => {
+        if (err.code !== 'EPIPE' && err.code !== 'EOF') {
+          if (timer) clearTimeout(timer);
+          reject(err);
+        }
+      });
+
+      if (input && Object.keys(input).length > 0) {
+        proc.stdin.write(JSON.stringify(input));
+      }
+      proc.stdin.end();
+
+      timer = setTimeout(() => {
+        proc.kill(isWindows ? undefined : 'SIGKILL');
+        reject(new Error(`Hook command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      proc.on('close', code => {
+        clearTimeout(timer);
+        resolve({ code, stdout, stderr });
+      });
+
+      proc.on('error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      return;
+    }
+
     const resolvedCommand = command.replace(
       /\$\{([A-Z_][A-Z0-9_]*)\}/g,
       (_, name) => String(mergedEnv[name] || '')
     );
 
-    const nodeMatch = resolvedCommand.match(/^node\s+"([^"]+)"\s*(.*)$/);
-    const useDirectNodeSpawn = Boolean(nodeMatch);
+    const inlineNodeMatch = resolvedCommand.match(/^node -e "((?:[^"\\]|\\.)*)"(?:\s+(.*))?$/s);
+    const fileNodeMatch = resolvedCommand.match(/^node\s+"([^"]+)"\s*(.*)$/);
+    const useDirectNodeSpawn = Boolean(inlineNodeMatch || fileNodeMatch);
     const shell = isWindows ? 'cmd' : 'bash';
     const shellArgs = isWindows ? ['/d', '/s', '/c', resolvedCommand] : ['-lc', resolvedCommand];
-    const nodeArgs = nodeMatch
-      ? [
-          nodeMatch[1],
-          ...Array.from(
-            nodeMatch[2].matchAll(/"([^"]*)"|(\S+)/g),
-            m => m[1] !== undefined ? m[1] : m[2]
-          )
-        ]
-      : [];
+    const splitArgs = value => Array.from(
+      String(value || '').matchAll(/"([^"]*)"|(\S+)/g),
+      m => m[1] !== undefined ? m[1] : m[2]
+    );
+    const unescapeInlineJs = value => value
+      .replace(/\\\\/g, '\\')
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t');
+    const nodeArgs = inlineNodeMatch
+      ? ['-e', unescapeInlineJs(inlineNodeMatch[1]), ...splitArgs(inlineNodeMatch[2])]
+      : fileNodeMatch
+        ? [fileNodeMatch[1], ...splitArgs(fileNodeMatch[2])]
+        : [];
 
     const proc = useDirectNodeSpawn
       ? spawn('node', nodeArgs, { env: mergedEnv, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -177,6 +224,26 @@ function createTestDir() {
 // Clean up test directory
 function cleanupTestDir(testDir) {
   fs.rmSync(testDir, { recursive: true, force: true });
+}
+
+function writeInstinctFile(filePath, entries) {
+  const body = entries.map(entry => `---
+id: ${entry.id}
+trigger: "${entry.trigger}"
+confidence: ${entry.confidence}
+domain: ${entry.domain || 'general'}
+scope: ${entry.scope}
+---
+
+## Action
+${entry.action}
+
+## Evidence
+${entry.evidence || 'Learned from repeated observations.'}
+`).join('\n');
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, body);
 }
 
 function getHookCommandByDescription(hooks, lifecycle, descriptionText) {
@@ -301,6 +368,161 @@ async function runTests() {
   if (await asyncTest('non-blocking hooks exit with code 0', async () => {
     const result = await runHookWithInput(path.join(scriptsDir, 'session-end.js'), {});
     assert.strictEqual(result.code, 0, 'Non-blocking hook should exit 0');
+  })) passed++; else failed++;
+
+  if (await asyncTest('session-start registers an observer lease for the active session', async () => {
+    const testDir = createTestDir();
+    const projectDir = path.join(testDir, 'project');
+    fs.mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const sessionId = `session-${Date.now()}`;
+      const result = await runHookWithInput(
+        path.join(scriptsDir, 'session-start.js'),
+        {},
+        {
+          HOME: testDir,
+          CLAUDE_PROJECT_DIR: projectDir,
+          CLAUDE_SESSION_ID: sessionId
+        }
+      );
+
+      assert.strictEqual(result.code, 0, 'SessionStart should exit 0');
+      const homunculusDir = path.join(testDir, '.claude', 'homunculus');
+      const projectsDir = path.join(homunculusDir, 'projects');
+      const projectEntries = fs.existsSync(projectsDir) ? fs.readdirSync(projectsDir) : [];
+      assert.ok(projectEntries.length > 0, 'SessionStart should create a homunculus project directory');
+      const leaseDir = path.join(projectsDir, projectEntries[0], '.observer-sessions');
+      const leaseFiles = fs.existsSync(leaseDir) ? fs.readdirSync(leaseDir).filter(name => name.endsWith('.json')) : [];
+      assert.ok(leaseFiles.length === 1, `Expected one observer lease file, found ${leaseFiles.length}`);
+    } finally {
+      cleanupTestDir(testDir);
+    }
+  })) passed++; else failed++;
+
+  if (await asyncTest('session-start injects high-confidence instincts into additionalContext', async () => {
+    const testDir = createTestDir();
+    const projectDir = path.join(testDir, 'project');
+    fs.mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const projectId = crypto.createHash('sha256').update(projectDir).digest('hex').slice(0, 12);
+      const homunculusDir = path.join(testDir, '.claude', 'homunculus');
+      const projectInstinctDir = path.join(homunculusDir, 'projects', projectId, 'instincts', 'personal');
+      const globalInstinctDir = path.join(homunculusDir, 'instincts', 'inherited');
+
+      writeInstinctFile(path.join(projectInstinctDir, 'project-instincts.yaml'), [
+        {
+          id: 'project-tests-first',
+          trigger: 'when changing tests',
+          confidence: 0.9,
+          scope: 'project',
+          action: 'Run the targeted *.test.js file first, then widen to node tests/run-all.js.',
+        },
+        {
+          id: 'project-low-confidence',
+          trigger: 'when guessing',
+          confidence: 0.4,
+          scope: 'project',
+          action: 'This should never be injected.',
+        },
+      ]);
+
+      writeInstinctFile(path.join(globalInstinctDir, 'global-instincts.yaml'), [
+        {
+          id: 'global-validation',
+          trigger: 'when editing hooks',
+          confidence: 0.82,
+          scope: 'global',
+          action: 'Keep hook scripts, tests, and docs aligned in the same change set.',
+        },
+      ]);
+
+      const result = await runHookWithInput(
+        path.join(scriptsDir, 'session-start.js'),
+        {},
+        {
+          HOME: testDir,
+          CLAUDE_PROJECT_DIR: projectDir,
+        }
+      );
+
+      assert.strictEqual(result.code, 0, 'SessionStart should exit 0');
+      const payload = getSessionStartPayload(result.stdout);
+      const additionalContext = payload.hookSpecificOutput.additionalContext;
+
+      assert.ok(additionalContext.includes('Active instincts:'), 'Should inject instinct summary into additionalContext');
+      assert.ok(additionalContext.includes('[project 90%] Run the targeted *.test.js file first, then widen to node tests/run-all.js.'), 'Should include project-scoped instinct');
+      assert.ok(additionalContext.includes('[global 82%] Keep hook scripts, tests, and docs aligned in the same change set.'), 'Should include global instinct');
+      assert.ok(!additionalContext.includes('This should never be injected.'), 'Should exclude low-confidence instincts');
+    } finally {
+      cleanupTestDir(testDir);
+    }
+  })) passed++; else failed++;
+
+  if (await asyncTest('session-end-marker removes the last lease and stops the observer process', async () => {
+    const testDir = createTestDir();
+    const projectDir = path.join(testDir, 'project');
+    fs.mkdirSync(projectDir, { recursive: true });
+
+    const sessionId = `session-${Date.now()}`;
+    const sleeper = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"], {
+      stdio: 'ignore'
+    });
+
+    try {
+      await runHookWithInput(
+        path.join(scriptsDir, 'session-start.js'),
+        {},
+        {
+          HOME: testDir,
+          CLAUDE_PROJECT_DIR: projectDir,
+          CLAUDE_SESSION_ID: sessionId
+        }
+      );
+
+      const homunculusDir = path.join(testDir, '.claude', 'homunculus');
+      const projectsDir = path.join(homunculusDir, 'projects');
+      const projectEntries = fs.existsSync(projectsDir) ? fs.readdirSync(projectsDir) : [];
+      assert.ok(projectEntries.length > 0, 'Expected SessionStart to create a homunculus project directory');
+      const projectStorageDir = path.join(projectsDir, projectEntries[0]);
+      const pidFile = path.join(projectStorageDir, '.observer.pid');
+      fs.writeFileSync(pidFile, `${sleeper.pid}\n`);
+
+      const markerInput = { hook_event_name: 'SessionEnd' };
+      const result = await runHookWithInput(
+        path.join(scriptsDir, 'session-end-marker.js'),
+        markerInput,
+        {
+          HOME: testDir,
+          CLAUDE_PROJECT_DIR: projectDir,
+          CLAUDE_SESSION_ID: sessionId
+        }
+      );
+
+      assert.strictEqual(result.code, 0, 'SessionEnd marker should exit 0');
+      assert.strictEqual(result.stdout, JSON.stringify(markerInput), 'SessionEnd marker should pass stdin through unchanged');
+
+      await new Promise(resolve => setTimeout(resolve, 150));
+      const exited = sleeper.exitCode !== null || sleeper.signalCode !== null;
+      let processAlive = !exited;
+      if (processAlive) {
+        try {
+          process.kill(sleeper.pid, 0);
+        } catch {
+          processAlive = false;
+        }
+      }
+      assert.strictEqual(processAlive, false, 'SessionEnd marker should stop the observer process when the last lease ends');
+
+      const leaseDir = path.join(projectStorageDir, '.observer-sessions');
+      const leaseFiles = fs.existsSync(leaseDir) ? fs.readdirSync(leaseDir).filter(name => name.endsWith('.json')) : [];
+      assert.strictEqual(leaseFiles.length, 0, 'SessionEnd marker should remove the finished session lease');
+      assert.strictEqual(fs.existsSync(pidFile), false, 'SessionEnd marker should remove the observer pid file after stopping it');
+    } finally {
+      sleeper.kill();
+      cleanupTestDir(testDir);
+    }
   })) passed++; else failed++;
 
   if (await asyncTest('dev server hook transforms yarn dev to tmux session', async () => {
@@ -723,16 +945,22 @@ async function runTests() {
     assert.ok(asyncHook.hooks[0].timeout > 0, 'Timeout should be positive');
 
     const command = asyncHook.hooks[0].command;
-    const isNodeInline = command.startsWith('node -e');
-    const isNodeScript = command.startsWith('node "');
+    const commandText = Array.isArray(command) ? command.join(' ') : command;
+    const isNodeInline =
+      (Array.isArray(command) && command[0] === 'node' && command[1] === '-e') ||
+      commandText.startsWith('node -e');
+    const isNodeScript =
+      (Array.isArray(command) && command[0] === 'node' && typeof command[1] === 'string' && command[1].endsWith('.js')) ||
+      commandText.startsWith('node "');
     const isShellWrapper =
-      command.startsWith('bash "') ||
-      command.startsWith('sh "') ||
-      command.startsWith('bash -lc ') ||
-      command.startsWith('sh -c ');
+      (Array.isArray(command) && (command[0] === 'bash' || command[0] === 'sh')) ||
+      commandText.startsWith('bash "') ||
+      commandText.startsWith('sh "') ||
+      commandText.startsWith('bash -lc ') ||
+      commandText.startsWith('sh -c ');
     assert.ok(
       isNodeInline || isNodeScript || isShellWrapper,
-      `Async hook command should be runnable (node -e, node script, or shell wrapper), got: ${command.substring(0, 80)}`
+      `Async hook command should be runnable (node -e, node script, or shell wrapper), got: ${commandText.substring(0, 80)}`
     );
   })) passed++; else failed++;
 
@@ -744,19 +972,28 @@ async function runTests() {
         for (const hook of hookDef.hooks) {
           assert.ok(hook.command, `Hook in ${hookType} should have command field`);
 
-          const isInline = hook.command.startsWith('node -e');
-          const isFilePath = hook.command.startsWith('node "');
-          const isNpx = hook.command.startsWith('npx ');
+          const command = hook.command;
+          const commandText = Array.isArray(command) ? command.join(' ') : command;
+          const isInline =
+            (Array.isArray(command) && command[0] === 'node' && command[1] === '-e') ||
+            commandText.startsWith('node -e');
+          const isFilePath =
+            (Array.isArray(command) && command[0] === 'node' && typeof command[1] === 'string' && command[1].endsWith('.js')) ||
+            commandText.startsWith('node "');
+          const isNpx = (Array.isArray(command) && command[0] === 'npx') || commandText.startsWith('npx ');
           const isShellWrapper =
-            hook.command.startsWith('bash "') ||
-            hook.command.startsWith('sh "') ||
-            hook.command.startsWith('bash -lc ') ||
-            hook.command.startsWith('sh -c ');
-          const isShellScriptPath = hook.command.endsWith('.sh');
+            (Array.isArray(command) && (command[0] === 'bash' || command[0] === 'sh')) ||
+            commandText.startsWith('bash "') ||
+            commandText.startsWith('sh "') ||
+            commandText.startsWith('bash -lc ') ||
+            commandText.startsWith('sh -c ');
+          const isShellScriptPath =
+            (Array.isArray(command) && typeof command[0] === 'string' && command[0].endsWith('.sh')) ||
+            commandText.endsWith('.sh');
 
           assert.ok(
             isInline || isFilePath || isNpx || isShellWrapper || isShellScriptPath,
-            `Hook command in ${hookType} should be node -e, node script, npx, or shell wrapper/script, got: ${hook.command.substring(0, 80)}`
+            `Hook command in ${hookType} should be node -e, node script, npx, or shell wrapper/script, got: ${commandText.substring(0, 80)}`
           );
         }
       }
