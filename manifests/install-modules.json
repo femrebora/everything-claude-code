@@ -125,6 +125,7 @@
         "skills/django-tdd",
         "skills/django-verification",
         "skills/dotnet-patterns",
+        "skills/fastapi-patterns",
         "skills/frontend-patterns",
         "skills/frontend-slides",
         "skills/golang-patterns",
@@ -149,7 +150,8 @@
         "skills/rust-testing",
         "skills/springboot-patterns",
         "skills/springboot-tdd",
-        "skills/springboot-verification"
+        "skills/springboot-verification",
+        "skills/ui-to-vue"
       ],
       "targets": [
         "claude",
@@ -177,6 +179,7 @@
         "skills/clickhouse-io",
         "skills/database-migrations",
         "skills/jpa-patterns",
+        "skills/mysql-patterns",
         "skills/postgres-patterns"
       ],
       "targets": [
@@ -212,6 +215,7 @@
         "skills/hookify-rules",
         "skills/iterative-retrieval",
         "skills/plankton-code-quality",
+        "skills/production-audit",
         "skills/skill-stocktake",
         "skills/strategic-compact",
         "skills/tdd-workflow",
@@ -274,7 +278,10 @@
       "paths": [
         "skills/deep-research",
         "skills/exa-search",
-        "skills/research-ops"
+        "skills/research-ops",
+        "skills/scientific-db-pubmed-database",
+        "skills/scientific-thinking-literature-review",
+        "skills/scientific-thinking-scholar-evaluation"
       ],
       "targets": [
         "claude",
@@ -507,8 +514,14 @@
       "kind": "skills",
       "description": "Deployment workflows, Docker patterns, and infrastructure skills.",
       "paths": [
+        "skills/cisco-ios-patterns",
         "skills/deployment-patterns",
-        "skills/docker-patterns"
+        "skills/docker-patterns",
+        "skills/homelab-network-setup",
+        "skills/netmiko-ssh-automation",
+        "skills/network-bgp-diagnostics",
+        "skills/network-config-validation",
+        "skills/network-interface-health"
       ],
       "targets": [
         "claude",
